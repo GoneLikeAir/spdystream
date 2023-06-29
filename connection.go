@@ -704,11 +704,11 @@ func (s *Connection) CreateStream(headers http.Header, parent *Stream, fin bool)
 func (s *Connection) shutdown(closeTimeout time.Duration) {
 	// TODO Ensure this isn't called multiple times
 	u := uuid.NewUUID()
-	fmt.Printf("spdystream: start to shutdown, uuid=%s, time=%s\n", u, time.Now().String())
+	debugMessage("spdystream: start to shutdown, uuid=%s, time=%s\n", u, time.Now().String())
 	s.shutdownLock.Lock()
-	fmt.Printf("spdystream: get lock success, uuid=%s\n, time=%s", u, time.Now().String())
+	debugMessage("spdystream: get lock success, uuid=%s\n, time=%s", u, time.Now().String())
 	if s.hasShutdown {
-		fmt.Printf("spdystream: conn already shutdown, uuid=%s, time=%s\n", u, time.Now().String())
+		debugMessage("spdystream: conn already shutdown, uuid=%s, time=%s\n", u, time.Now().String())
 		s.shutdownLock.Unlock()
 		return
 	}
@@ -724,7 +724,7 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 	go func() {
 		s.streamCond.L.Lock()
 		for len(s.streams) > 0 {
-			fmt.Printf("spdystream: s.streams > 0, wait, uuid=%s, time=%s\n", u, time.Now().String())
+			debugMessage("spdystream: s.streams > 0, wait, uuid=%s, time=%s\n", u, time.Now().String())
 			debugMessage("Streams opened: %d, %#v", len(s.streams), s.streams)
 			s.streamCond.Wait()
 		}
@@ -738,28 +738,28 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 		// No active streams, close should be safe
 		err = s.conn.Close()
 	case <-timeout:
-		fmt.Printf("spdystream: shutdown timeout, force shutdown, uuid=%s, time=%s\n", u, time.Now().String())
+		debugMessage("spdystream: shutdown timeout, force shutdown, uuid=%s, time=%s\n", u, time.Now().String())
 		// Force ungraceful close
 		err = s.conn.Close()
 		for _, s := range s.streams {
-			fmt.Printf("spdystream: closing steam %d, uuid=%s, time=%s\n", s.streamId, u, time.Now().String())
+			debugMessage("spdystream: closing steam %d, uuid=%s, time=%s\n", s.streamId, u, time.Now().String())
 			s.closeRemoteChannels()
-			fmt.Printf("spdystream: finish closing steam %d, uuid=%s, time=%s\n", s.streamId, u, time.Now().String())
+			debugMessage("spdystream: finish closing steam %d, uuid=%s, time=%s\n", s.streamId, u, time.Now().String())
 		}
 		// Wait for cleanup to clear active streams
 		<-streamsClosed
-		fmt.Printf("spdystream: all stream closed, uuid=%s, time=%s\n", u, time.Now().String())
+		debugMessage("spdystream: all stream closed, uuid=%s, time=%s\n", u, time.Now().String())
 	}
 
 	if err != nil {
-		fmt.Printf("spdystream: closing err!=nil, err=%s, uuid=%s, time=%s\n", err.Error(), u, time.Now().String())
+		debugMessage("spdystream: closing err!=nil, err=%s, uuid=%s, time=%s\n", err.Error(), u, time.Now().String())
 		duration := 1 * time.Minute
 		time.AfterFunc(duration, func() {
-			fmt.Printf("spdystream: waiting shutdown err, uuid=%s, time=%s\n", u, time.Now().String())
+			debugMessage("spdystream: waiting shutdown err, uuid=%s, time=%s\n", u, time.Now().String())
 			select {
 			case err, ok := <-s.shutdownChan:
 				if ok {
-					fmt.Printf("spdystream: Unhandled close error after %s: %s, uuid=%s, time=%s\n", duration, err, u, time.Now().String())
+					debugMessage("spdystream: Unhandled close error after %s: %s, uuid=%s, time=%s\n", duration, err, u, time.Now().String())
 					debugMessage("Unhandled close error after %s: %s", duration, err)
 				}
 			default:
@@ -768,7 +768,7 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 		s.shutdownChan <- err
 	}
 	close(s.shutdownChan)
-	fmt.Printf("spdystream: finish shutdown, uuid=%s, time=%s\n", u, time.Now().String())
+	debugMessage("spdystream: finish shutdown, uuid=%s, time=%s\n", u, time.Now().String())
 }
 
 // Closes spdy connection by sending GoAway frame and initiating shutdown
