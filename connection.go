@@ -19,6 +19,7 @@ package spdystream
 import (
 	"errors"
 	"fmt"
+	"github.com/pborman/uuid"
 	"io"
 	"net"
 	"net/http"
@@ -702,8 +703,12 @@ func (s *Connection) CreateStream(headers http.Header, parent *Stream, fin bool)
 
 func (s *Connection) shutdown(closeTimeout time.Duration) {
 	// TODO Ensure this isn't called multiple times
+	u := uuid.NewUUID()
+	fmt.Printf("spdystream: start to shutdown, uuid=%s\n", u)
 	s.shutdownLock.Lock()
+	fmt.Printf("spdystream: get lock success, uuid=%s\n", u)
 	if s.hasShutdown {
+		fmt.Printf("spdystream: conn already shutdown, uuid=%s\n", u)
 		s.shutdownLock.Unlock()
 		return
 	}
@@ -719,6 +724,7 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 	go func() {
 		s.streamCond.L.Lock()
 		for len(s.streams) > 0 {
+			fmt.Printf("spdystream: s.streams > 0, wait, uuid=%s\n", u)
 			debugMessage("Streams opened: %d, %#v", len(s.streams), s.streams)
 			s.streamCond.Wait()
 		}
@@ -732,21 +738,28 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 		// No active streams, close should be safe
 		err = s.conn.Close()
 	case <-timeout:
+		fmt.Printf("spdystream: shutdown timeout, force shutdown, uuid=%s\n", u)
 		// Force ungraceful close
 		err = s.conn.Close()
 		for _, s := range s.streams {
+			fmt.Printf("spdystream: closing steam %d, uuid=%s\n", s.streamId, u)
 			s.closeRemoteChannels()
+			fmt.Printf("spdystream: finish closing steam %d, uuid=%s\n", s.streamId, u)
 		}
 		// Wait for cleanup to clear active streams
 		<-streamsClosed
+		fmt.Printf("spdystream: all stream closed, uuid=%s\n", u)
 	}
 
 	if err != nil {
-		duration := 5 * time.Minute
+		fmt.Printf("spdystream: closing err!=nil, err=%s, uuid=%s\n", err.Error(), u)
+		duration := 1 * time.Minute
 		time.AfterFunc(duration, func() {
+			fmt.Printf("spdystream: waiting shutdown err, uuid=%s\n", u)
 			select {
 			case err, ok := <-s.shutdownChan:
 				if ok {
+					fmt.Printf("spdystream: Unhandled close error after %s: %s, uuid=%s\n", duration, err, u)
 					debugMessage("Unhandled close error after %s: %s", duration, err)
 				}
 			default:
@@ -755,6 +768,7 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 		s.shutdownChan <- err
 	}
 	close(s.shutdownChan)
+	fmt.Printf("spdystream: finish shutdown, uuid=%s\n", u)
 }
 
 // Closes spdy connection by sending GoAway frame and initiating shutdown
