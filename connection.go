@@ -319,8 +319,13 @@ func (s *Connection) Serve(newHandler StreamHandler) {
 
 		// Ensure frame queue is drained when connection is closed
 		go func(frameQueue *PriorityFrameQueue) {
-			<-s.closeChan
-			frameQueue.Drain()
+			timer := time.NewTimer(time.Minute * 5)
+			select {
+			case <-timer.C:
+				frameQueue.Drain()
+			case <-s.closeChan:
+				frameQueue.Drain()
+			}
 		}(frameQueues[i])
 
 		wg.Add(1)
@@ -597,7 +602,11 @@ func (s *Connection) handleDataFrame(frame *spdy.DataFrame) error {
 	debugMessage("(%p) (%d) Data frame handling", stream, stream.streamId)
 	if len(frame.Data) > 0 {
 		stream.dataLock.RLock()
+		timer := time.NewTimer(time.Minute * 5)
 		select {
+		case <-timer.C:
+			stream.closeRemoteChannels()
+			debugMessage("(%p) (%d) Data frame not sent (stream shut down, timeout)", stream, stream.streamId)
 		case <-stream.closeChan:
 			debugMessage("(%p) (%d) Data frame not sent (stream shut down)", stream, stream.streamId)
 		case stream.dataChan <- frame.Data:
