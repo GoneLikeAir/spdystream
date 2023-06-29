@@ -734,12 +734,15 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 	case <-timeout:
 		// Force ungraceful close
 		err = s.conn.Close()
+		for _, s := range s.streams {
+			s.closeRemoteChannels()
+		}
 		// Wait for cleanup to clear active streams
 		<-streamsClosed
 	}
 
 	if err != nil {
-		duration := 10 * time.Minute
+		duration := 5 * time.Minute
 		time.AfterFunc(duration, func() {
 			select {
 			case err, ok := <-s.shutdownChan:
